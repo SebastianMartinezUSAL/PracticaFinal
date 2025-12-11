@@ -75,16 +75,8 @@ public class JSONQuestionBackupIO implements QuestionBackupIO {
 
             return parseQuestions(json);
 
-        } catch (FileNotFoundException fnf) {
-            throw new QuestionBackupIOException(
-                    "No se encontró el fichero JSON: " + fnf.getMessage(), fnf
-            );
         } catch (Exception e) {
-            e.printStackTrace();
-            throw new QuestionBackupIOException(
-                    "Error interno importando JSON: " + e.getClass().getSimpleName() + " - " + e.getMessage(),
-                    e
-            );
+            throw new QuestionBackupIOException("Error importando JSON: " + e.getMessage(), e);
         }
     }
 
@@ -98,7 +90,7 @@ public class JSONQuestionBackupIO implements QuestionBackupIO {
         StringBuilder sb = new StringBuilder();
         String line;
         while ((line = br.readLine()) != null) {
-            sb.append(line.trim());
+            sb.append(line);
         }
         br.close();
         return sb.toString();
@@ -109,14 +101,10 @@ public class JSONQuestionBackupIO implements QuestionBackupIO {
 
         if (json == null) return list;
         json = json.trim();
-        if (json.length() < 2 || json.charAt(0) != '[' || json.charAt(json.length() - 1) != ']') {
-            return list;
-        }
+        if (json.length() < 2 || !json.startsWith("[") || !json.endsWith("]")) return list;
 
         String inner = json.substring(1, json.length() - 1).trim();
-        if (inner.isEmpty()) {
-            return list;
-        }
+        if (inner.isEmpty()) return list;
 
         List<String> blocks = new ArrayList<>();
         int depth = 0;
@@ -125,9 +113,7 @@ public class JSONQuestionBackupIO implements QuestionBackupIO {
         for (int i = 0; i < inner.length(); i++) {
             char c = inner.charAt(i);
             if (c == '{') {
-                if (depth == 0) {
-                    start = i;
-                }
+                if (depth == 0) start = i;
                 depth++;
             } else if (c == '}') {
                 depth--;
@@ -143,30 +129,33 @@ public class JSONQuestionBackupIO implements QuestionBackupIO {
             String author = extract(block, "\"author\": \"", "\"");
             String statement = extract(block, "\"statement\": \"", "\"");
 
-            String topicsRaw = extract(block, "\"topics\": [", "]");
+            String topicsRaw = extractUntilMatchingBracket(block, "\"topics\": [");
             HashSet<String> topics = new HashSet<>();
             if (!topicsRaw.isEmpty()) {
-                String[] ts = topicsRaw.split(",");
-                for (String t : ts) {
-                    String v = t.replace("\"", "").trim();
-                    if (!v.isEmpty()) topics.add(v);
+                String cleaned = topicsRaw.replace("\n","").replace("\r","").replace(" ","");
+                if (!cleaned.isEmpty()) {
+                    String[] ts = cleaned.split(",");
+                    for (String t : ts) {
+                        String v = t.replace("\"", "").trim();
+                        if (!v.isEmpty()) topics.add(v);
+                    }
                 }
             }
 
-            String optsRaw = extract(block, "\"options\": [", "]");
+            String optsRaw = extractUntilMatchingBracket(block, "\"options\": [");
             List<Option> options = new ArrayList<>();
             if (!optsRaw.isEmpty()) {
-                String tmp = optsRaw.trim();
-                String[] optBlocks = tmp.split("\\},\\{");
+                String cleaned = optsRaw.replace("\n","").replace("\r","").replace(" ","");
+                String[] optBlocks = cleaned.split("\\},\\{");
                 for (String ob : optBlocks) {
                     String o = ob.trim();
                     if (!o.startsWith("{")) o = "{" + o;
                     if (!o.endsWith("}")) o = o + "}";
-                    o = o.replace("{", "").replace("}", "");
+                    o = o.substring(1, o.length() - 1);
 
                     String text = extract(o, "\"text\": \"", "\"");
                     String rationale = extract(o, "\"rationale\": \"", "\"");
-                    boolean correct = o.contains("\"correct\": true");
+                    boolean correct = o.contains("\"correct\":true");
 
                     options.add(new Option(text, rationale, correct));
                 }
@@ -195,10 +184,25 @@ public class JSONQuestionBackupIO implements QuestionBackupIO {
         return text.substring(a, b);
     }
 
+    private String extractUntilMatchingBracket(String text, String start) {
+        int startIndex = text.indexOf(start);
+        if (startIndex == -1) return "";
+        startIndex += start.length();
+        int depth = 1;
+        StringBuilder sb = new StringBuilder();
+        for (int i = startIndex; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c == '[') depth++;
+            if (c == ']') depth--;
+            if (depth == 0) return sb.toString();
+            sb.append(c);
+        }
+        return "";
+    }
+
     private File findFileAnywhere(String fileName) {
         File f = new File(fileName);
         if (f.isAbsolute() && f.exists()) return f;
-
         if (f.exists()) return f;
 
         String homePath = System.getProperty("user.home");
@@ -209,8 +213,8 @@ public class JSONQuestionBackupIO implements QuestionBackupIO {
         File[] roots = File.listRoots();
         if (roots != null) {
             for (File root : roots) {
-                found = searchRecursive(root, fileName);
-                if (found != null) return found;
+                File found2 = searchRecursive(root, fileName);
+                if (found2 != null) return found2;
             }
         }
 
@@ -218,9 +222,7 @@ public class JSONQuestionBackupIO implements QuestionBackupIO {
     }
 
     private File searchRecursive(File dir, String fileName) {
-        if (dir == null) return null;
-        if (!dir.exists()) return null;
-        if (!dir.isDirectory()) return null;
+        if (dir == null || !dir.exists() || !dir.isDirectory()) return null;
 
         File[] files;
         try {
@@ -232,9 +234,7 @@ public class JSONQuestionBackupIO implements QuestionBackupIO {
         if (files == null) return null;
 
         for (File f : files) {
-            if (f.isFile() && f.getName().equals(fileName)) {
-                return f;
-            }
+            if (f.isFile() && f.getName().equals(fileName)) return f;
         }
 
         for (File f : files) {
