@@ -51,7 +51,7 @@ public class InteractiveView extends BaseView {
 
     private void showMainMenu() {
         System.out.println();
-        System.out.println("==== Programa de examenes ====");
+        System.out.println("==== Programa ====");
         System.out.println("1. Gestion de preguntas (CRUD)");
         System.out.println("2. Exportar / Importar preguntas (JSON)");
         System.out.println("3. Crear pregunta automatica");
