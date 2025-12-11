@@ -1,0 +1,10 @@
+{
+    "java.project.sourcePaths": [
+        "src"
+    ],
+    "java.project.referencedLibraries": [
+        "/Users/sebastianmartinez/Downloads/biblioteca11.jar",
+        "/Users/sebastianmartinez/Downloads/gson-2.10.1.jar",
+        "/Users/sebastianmartinez/Downloads/jadapter-for-native-tts-0.12.0.jar"
+    ]
+}
